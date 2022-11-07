@@ -1,0 +1,175 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-friends
+  namespace: sicilia
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: hello-friends
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kbld.k14s.io/images: |
+      - origins:
+        - local:
+            path: /Users/mbrodi/git/carvel-demo/src
+        - git:
+            dirty: true
+            remoteURL: https://github.com/ciberkleid/carvel-demo.git
+            sha: adac3d9a7f12e10b624e5e06f755180689186a0e
+        - preresolved:
+            url: index.docker.io/marygabry1508/hello-app@sha256:93b382504ae1609ac1f052841bf0cfee7c4dca3560396a8132cccbf3d32cc8de
+        url: index.docker.io/marygabry1508/hello-app@sha256:93b382504ae1609ac1f052841bf0cfee7c4dca3560396a8132cccbf3d32cc8de
+  name: hello-friends
+  namespace: sicilia
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hello-friends
+  template:
+    metadata:
+      labels:
+        app: hello-friends
+    spec:
+      containers:
+      - env:
+        - name: HELLO_MSG
+          value: Sicilia!!
+        - name: REDIS_ADDRESS
+          value: hello-friends-redis-leader.sicilia.svc.cluster.local:6379
+        image: index.docker.io/marygabry1508/hello-app@sha256:93b382504ae1609ac1f052841bf0cfee7c4dca3560396a8132cccbf3d32cc8de
+        name: hello-app
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sicilia
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kbld.k14s.io/images: |
+      - origins:
+        - resolved:
+            tag: v2
+            url: gcr.io/google_samples/gb-redis-follower:v2
+        - preresolved:
+            url: gcr.io/google_samples/gb-redis-follower@sha256:13889cdb4536f60cddb9db70484961c84e5be6e2dc6e03887764847b7e62ae54
+        url: gcr.io/google_samples/gb-redis-follower@sha256:13889cdb4536f60cddb9db70484961c84e5be6e2dc6e03887764847b7e62ae54
+  labels:
+    app: redis
+    role: follower
+    tier: backend
+  name: hello-friends-redis-follower
+  namespace: sicilia
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: follower
+        tier: backend
+    spec:
+      containers:
+      - env:
+        - name: GET_HOSTS_FROM
+          value: env
+        - name: REDIS_LEADER_SERVICE_HOST
+          value: hello-friends-redis-leader
+        image: gcr.io/google_samples/gb-redis-follower@sha256:13889cdb4536f60cddb9db70484961c84e5be6e2dc6e03887764847b7e62ae54
+        name: follower
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: redis
+    role: follower
+    tier: backend
+  name: hello-friends-redis-follower
+  namespace: sicilia
+spec:
+  ports:
+  - port: 6379
+  selector:
+    app: redis
+    role: follower
+    tier: backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kbld.k14s.io/images: |
+      - origins:
+        - resolved:
+            tag: 6.0.5
+            url: docker.io/redis:6.0.5
+        - preresolved:
+            url: index.docker.io/library/redis@sha256:800f2587bf3376cb01e6307afe599ddce9439deafbd4fb8562829da96085c9c5
+        url: index.docker.io/library/redis@sha256:800f2587bf3376cb01e6307afe599ddce9439deafbd4fb8562829da96085c9c5
+  labels:
+    app: redis
+    role: leader
+    tier: backend
+  name: hello-friends-redis-leader
+  namespace: sicilia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: leader
+        tier: backend
+    spec:
+      containers:
+      - image: index.docker.io/library/redis@sha256:800f2587bf3376cb01e6307afe599ddce9439deafbd4fb8562829da96085c9c5
+        name: leader
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: redis
+    role: leader
+    tier: backend
+  name: hello-friends-redis-leader
+  namespace: sicilia
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+    role: leader
+    tier: backend
